@@ -81,3 +81,7 @@ memoMap maxSize f = f'
     cacheRef :: IORef (Map a b)
     cacheRef = unsafePerformIO (newIORef Map.empty)
     {-# NOINLINE cacheRef #-}
+
+safeHead :: [a] -> Maybe a
+safeHead [] = Nothing
+safeHead (x:_) = Just x
