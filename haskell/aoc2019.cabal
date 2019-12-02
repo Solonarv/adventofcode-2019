@@ -1,9 +1,9 @@
 cabal-version:       2.4
-name:                aoc2018
+name:                aoc2019
 version:             0.1.0.0
-synopsis:            My Advent of Code 2018 solutions.
-description:         My Advent of Code 2018 solutions.
-homepage:            https://github.com/Solonarv/adventofcode-2018#README
+synopsis:            My Advent of Code 2019 solutions.
+description:         My Advent of Code 2019 solutions.
+homepage:            https://github.com/Solonarv/adventofcode-2019#README
 license:             MIT
 license-file:        LICENSE
 author:              Solonarv
@@ -64,40 +64,5 @@ library day01
   import: deps, lang
   exposed-modules: Day01
   hs-source-dirs: day01
-  build-depends: aoc2018
+  build-depends: aoc2019
 
-library day02
-  import: deps, lang
-  exposed-modules: Day02
-  hs-source-dirs: day02
-  build-depends: aoc2018
-
-library day03
-  import: deps, lang
-  exposed-modules: Day03
-  hs-source-dirs: day03
-  build-depends: aoc2018
-
-library day04
-  import: deps, lang
-  exposed-modules: Day04
-  hs-source-dirs: day04
-  build-depends: aoc2018, util
-
-library day05
-  import: deps, lang
-  exposed-modules: Day05
-  hs-source-dirs: day05
-  build-depends: aoc2018, util
-
-library day06
-  import: deps, lang
-  exposed-modules: Day06
-  hs-source-dirs: day06
-  build-depends: aoc2018, util
-
-library day07
-  import: deps, lang
-  exposed-modules: Day07
-  hs-source-dirs: day07
-  build-depends: aoc2018, util

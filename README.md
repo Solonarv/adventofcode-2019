@@ -1,5 +1,5 @@
-# adventofcode-2018
-My Advent of Code 2018 solutions.
+# adventofcode-2019
+My Advent of Code 2019 solutions.
 
 Haskell solutions are in the `haskell/` folder.
 
@@ -8,5 +8,5 @@ will be in the `rust/` folder.
 
 ## GIANT OBVIOUS SPOILER WARNING OF OBVIOUSNESS
 
-This repo contains solutions for Advent of Code 2018. Don't look at it
+This repo contains solutions for Advent of Code 2019. Don't look at it
 if you want to figure them out for yourself.
