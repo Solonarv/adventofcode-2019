@@ -49,6 +49,7 @@ library
   build-depends:       optparse-applicative
                      , finite-typelits
                      , ansi-terminal
+                     , directory
                      , htoml
                      , req
                      , http-client
@@ -59,11 +60,11 @@ library
 library util
   import: deps, lang
   hs-source-dirs:      util
-  exposed-modules:     Util
+  exposed-modules:     Util, ParsingPrelude
 
 library day01
   import: deps, lang
   exposed-modules: Day01
   hs-source-dirs: day01
-  build-depends: aoc2019
+  build-depends: aoc2019, util
 

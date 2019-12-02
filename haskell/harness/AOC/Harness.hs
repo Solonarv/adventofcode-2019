@@ -3,7 +3,8 @@ module AOC.Harness where
 
 import Control.Exception
 import Control.Monad
-import Data.Foldable  
+import Data.Char (isSpace)
+import Data.Foldable
 import qualified Data.List as List
 import Data.Proxy
 import GHC.TypeLits
@@ -27,6 +28,7 @@ import Network.HTTP.Req as Req
 import Options.Applicative
 import qualified System.Console.ANSI as Ansi
 import System.Directory
+import Text.Megaparsec (parse, errorBundlePretty)
 import qualified Text.Toml as Toml
 import qualified Text.Toml.Types as Toml
 
@@ -205,11 +207,12 @@ runTestsOn day Solution{tests,decodeInput,solvePart,showResult} parts = do
   for_ (zip [1..] tests) $ \(n :: Int, input :=> expected) -> do
     fgColor Ansi.Vivid Ansi.Blue
     printf "  Test #%v\n" n
-    case decodeInput input of
-      Nothing -> do
+    case parse decodeInput "<test input>" input of
+      Left err -> do
         fgColor Ansi.Dull Ansi.Red
-        printf "    Couldn't decode input.\n"
-      Just dat -> for_ parts $ \part ->
+        printf "    Couldn't decode test input.\n"
+        printf (errorBundlePretty err)
+      Right dat -> for_ parts $ \part ->
         for_ (List.lookup part expected) $ \expectedResult -> do
           case solvePart part dat of
             Nothing -> do
@@ -247,11 +250,12 @@ runSolveOn day opts cfg upload Solution{decodeInput,solvePart,showResult} parts 
   printf "Running solution for day %v...\n" day
   let infile = printf "%s/day%.2d.txt" (oInputDataDir opts) day
   input <- readFile infile
-  case decodeInput input of
-    Nothing -> do
+  case parse decodeInput infile . List.dropWhile isSpace . List.dropWhileEnd isSpace $ input of
+    Left err -> do
       fgColor Ansi.Dull Ansi.Red
-      printf "  Couldn't decode input: %v\n" infile
-    Just dat -> for_ parts $ \part -> do
+      printf "  Couldn't decode input! \n"
+      printf (errorBundlePretty err)
+    Right dat -> for_ parts $ \part -> do
       case solvePart part dat of
         Nothing  -> do
           fgColor Ansi.Dull Ansi.Red

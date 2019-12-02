@@ -13,13 +13,8 @@ import qualified Data.IntMap.Strict as IntMap
 import Data.Map.Strict (Map)
 import qualified Data.Map as Map
 import Text.Megaparsec
-import Text.Megaparsec.Char
 
 type Parser = Parsec Void String
-
--- | Parse an integer.
-int :: Parser Int
-int = read <$> many digitChar
 
 -- | Appropriately strict version of 'sum'.
 sum' :: (Foldable t, Num a) => t a -> a
