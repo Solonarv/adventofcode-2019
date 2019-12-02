@@ -13,7 +13,6 @@ import Text.Printf
 import Text.Read
 
 import qualified Data.ByteString as ByteString
-import Data.Default
 import Data.Finite
 import Data.Finite.Internal -- We need this to define a PrintfArg (Finite n) instance
 import qualified Data.HashMap.Lazy as HashMap
@@ -27,6 +26,7 @@ import Network.HTTP.Req as Req
 -- import qualified Network.HTTP.Client as HTTP
 import Options.Applicative
 import qualified System.Console.ANSI as Ansi
+import System.Directory
 import qualified Text.Toml as Toml
 import qualified Text.Toml.Types as Toml
 
@@ -174,13 +174,14 @@ fetchInput year opts day = do
     case cfgToken cfg of
       Nothing -> die' "Can't fetch input: missing session token!"
       Just tok -> do
-        response <- runReq def $
+        response <- runReq defaultHttpConfig $
           req GET
               (https "adventofcode.com" /~ year /: "day" /~ fromIntegral @_ @Int day /: "input")
               NoReqBody
               bsResponse
               (sessTokenHeader tok)
         let outfile = printf "%s/day%.2d.txt" (oInputDataDir opts) day
+        createDirectoryIfMissing True (oInputDataDir opts)
         ByteString.writeFile outfile (responseBody response)
 
 sessTokenHeader :: Text -> Option scheme

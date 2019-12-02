@@ -5,7 +5,7 @@ import qualified Day01
 
 solutions :: Solutions
 solutions = solutionsFromList
-  [ S Day01.solution
+  [ -- S Day01.solution
   ]
 
 main :: IO ()
