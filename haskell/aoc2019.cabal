@@ -15,12 +15,13 @@ extra-source-files:  CHANGELOG.md
 
 common deps
   build-depends:       base >=4.12 && <5
-                     , containers
+                     , containers ^>= 0.6
                      , vector
                      , bytestring
                      , text
                      , unordered-containers
-                     , megaparsec
+                     , megaparsec ^>= 8.0
+                     , parser-combinators
                      , linear
                      , split
 
@@ -32,6 +33,7 @@ common lang
                        TypeApplications ScopedTypeVariables ConstraintKinds FunctionalDependencies
                        MultiParamTypeClasses NamedFieldPuns LambdaCase BangPatterns DerivingStrategies
                        GeneralizedNewtypeDeriving RoleAnnotations TupleSections BlockArguments
+                       DeriveFunctor DeriveFoldable DeriveTraversable DerivingVia
   ghc-options:         -Wall -O2
 
 executable solve
@@ -39,7 +41,7 @@ executable solve
   main-is:             Main.hs
   hs-source-dirs:      src
   build-depends:       aoc2019
-                     , day01, day02
+                     , day01, day02, day03
   ghc-options:         -threaded -rtsopts -funbox-small-strict-fields
 
 library
@@ -74,3 +76,8 @@ library day02
   hs-source-dirs: day02
   build-depends: aoc2019, util
 
+library day03
+  import: deps, lang
+  exposed-modules: Day03
+  hs-source-dirs: day03
+  build-depends: aoc2019, util
