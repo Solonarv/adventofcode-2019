@@ -1,5 +1,6 @@
 module Util where
 
+import Control.Applicative
 import Control.Monad
 import Data.Foldable
 import Data.Function
@@ -11,7 +12,8 @@ import System.IO.Unsafe
 import Data.IntMap.Strict (IntMap)
 import qualified Data.IntMap.Strict as IntMap
 import Data.Map.Strict (Map)
-import qualified Data.Map as Map
+import qualified Data.Map.Strict as Map
+import qualified Data.Map.Internal as Map.Internal
 import Text.Megaparsec
 
 type Parser = Parsec Void String
@@ -55,6 +57,21 @@ maximumOn f = maximumBy (compare `on` f)
 
 minimumOn :: (Foldable t, Ord i) => (a -> i) -> t a -> a
 minimumOn f = minimumBy (compare `on` f)
+
+maxOn :: Ord i => (a -> i) -> a -> a -> a
+maxOn f x y = if f x < f y then y else x
+
+minOn :: Ord i => (a -> i) -> a -> a -> a
+minOn f x y = if f x > f y then y else x
+
+collapseMapWith :: (k -> v -> a) -> (a -> a -> a) -> Map k v -> Maybe a
+collapseMapWith f op = collapse
+  where
+    collapse Map.Internal.Tip = Nothing
+    collapse (Map.Internal.Bin _ k v l r) = collapse l ## (Just (f k v) ## collapse r)
+
+    a ## b = liftA2 op a b <|> a <|> b
+    {-# INLINE (##) #-}
 
 -- | Repeatedly apply a function to an input until
 -- a fix-point is reached. May loop forever if no
