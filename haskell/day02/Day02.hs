@@ -1,9 +1,8 @@
 module Day02 where
 
 import Control.Monad
-import Control.Monad.ST
 
-import Data.Vector (Vector, (!), (//))
+import Data.Vector (Vector, (//))
 import qualified Data.Vector as Vector
 import qualified Data.Vector.Mutable as MVector
 
