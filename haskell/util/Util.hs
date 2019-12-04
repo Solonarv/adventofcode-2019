@@ -16,8 +16,6 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Map.Internal as Map.Internal
 import Text.Megaparsec
 
-type Parser = Parsec Void String
-
 -- | Appropriately strict version of 'sum'.
 sum' :: (Foldable t, Num a) => t a -> a
 sum' = foldl' (+) 0
@@ -102,3 +100,14 @@ memoMap maxSize f = f'
 safeHead :: [a] -> Maybe a
 safeHead [] = Nothing
 safeHead (x:_) = Just x
+
+diag :: a -> (a, a)
+diag x = (x,x)
+
+swap :: (a, b) -> (b, a)
+swap (x,y) = (y,x)
+
+infixr 9 .:
+(.:) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
+f .: op = \x -> f . op x
+{-# INLINE (.:) #-}
