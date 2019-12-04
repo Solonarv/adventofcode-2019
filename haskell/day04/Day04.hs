@@ -40,16 +40,7 @@ isNondecreasing :: Ord a => [a] -> Bool
 isNondecreasing = and . (zipWith (<=) <*> tail)
 
 runs :: Eq a => [a] -> [Int]
-runs [] = []
-runs (x:xs) = unfoldr
-  \case
-    (_, []) -> Nothing
-    (cur, els) ->
-      let (eq, neq) = span (== cur) els
-      in Just case neq of
-        (next:els') -> (length eq + 1, (next, els'))
-        [] -> (length eq + 1, (cur, []))
-  (x, xs)
+runs = map length . group
 
 hasIsolatedDoubleDigit :: Eq a => [a] -> Bool
 hasIsolatedDoubleDigit digits = 2 `elem` runs digits
