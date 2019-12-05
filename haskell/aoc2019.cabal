@@ -87,3 +87,9 @@ library day04
   exposed-modules: Day04
   hs-source-dirs: day04
   build-depends: aoc2019, util
+
+library day05
+  import: deps, lang
+  exposed-modules: Day05
+  hs-source-dirs: day04
+  build-depends: aoc2019, util
