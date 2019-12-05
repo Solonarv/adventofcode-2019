@@ -14,7 +14,6 @@ import qualified Data.IntMap.Strict as IntMap
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import qualified Data.Map.Internal as Map.Internal
-import Text.Megaparsec
 
 -- | Appropriately strict version of 'sum'.
 sum' :: (Foldable t, Num a) => t a -> a
@@ -111,3 +110,12 @@ infixr 9 .:
 (.:) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 f .: op = \x -> f . op x
 {-# INLINE (.:) #-}
+
+infixr 5 :>>
+data Stream a = a :>> Stream a
+  deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
+
+unfoldStream :: (b -> (a, b)) -> b -> Stream a
+unfoldStream f = loop
+  where
+    loop x = let (a, x') = f x in a :>> loop x'
