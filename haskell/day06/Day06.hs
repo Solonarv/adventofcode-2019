@@ -13,7 +13,15 @@ import Util
 
 solution :: Solution (Map String (Map String Int)) Int
 solution = Solution
-  { decodeInput = orbitAncestors . Map.fromList <$> ((flip (,) <$> word <* char ')' <*> word) `sepBy` space)
+  { decodeInput = orbitAncestors . Map.fromList <$>
+    (
+      ( flip (,)
+      <$> alphaNumChar `manyTill` char ')'
+      <*> some alphaNumChar
+      )
+    `sepBy`
+      space
+    )
   , parts = "ab"
   , solvePart = \case
     'a' -> Just . totalOrbits
@@ -29,8 +37,6 @@ solution = Solution
       ]
     ]
   }
-  where
-    word = some alphaNumChar
 
 totalOrbits :: Map String (Map String Int) -> Int
 totalOrbits = sum' . fmap length
