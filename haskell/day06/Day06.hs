@@ -1,7 +1,7 @@
 module Day06 where
 
 import Control.Monad
-import Data.Maybe
+import Data.Foldable
 
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
@@ -11,7 +11,7 @@ import AOC.Solution
 import ParsingPrelude
 import Util
 
-solution :: Solution (Map String (Int, Map String Int)) Int
+solution :: Solution (Map String (Map String Int)) Int
 solution = Solution
   { decodeInput = orbitAncestors . Map.fromList <$> ((flip (,) <$> word <* char ')' <*> word) `sepBy` space)
   , parts = "ab"
@@ -32,26 +32,22 @@ solution = Solution
   where
     word = some alphaNumChar
 
-totalOrbits :: Map String (Int, Map String Int) -> Int
-totalOrbits = sum' . fmap fst
+totalOrbits :: Map String (Map String Int) -> Int
+totalOrbits = sum' . fmap length
 
-orbitAncestors :: Map String String -> Map String (Int, Map String Int)
+orbitAncestors :: Map String String -> Map String (Map String Int)
 orbitAncestors orbitMap = ancestors
   where
     ancestors = flip LazyMap.map
       orbitMap
       \parent ->
-        let
-          ~(depth, distances) = fromMaybe (0, Map.empty) (Map.lookup parent ancestors)
-        in
-          ( depth + 1
-          , Map.insert parent 1 $ Map.map (+1) distances
-          )
+        let distances = fold (Map.lookup parent ancestors)
+        in Map.insert parent 1 $ Map.map (+1) distances
 
-shortestTransfer :: String -> String -> Map String (Int, Map String Int) -> Maybe Int
+shortestTransfer :: String -> String -> Map String (Map String Int) -> Maybe Int
 shortestTransfer src tgt orbits = do
-  srcAncestors <- snd <$> Map.lookup src orbits
-  tgtAncestors <- snd <$> Map.lookup tgt orbits
+  srcAncestors <- Map.lookup src orbits
+  tgtAncestors <- Map.lookup tgt orbits
   let commonAncestors = Map.intersectionWith (+) srcAncestors tgtAncestors
   guard . not . null $ commonAncestors
   pure (minimum commonAncestors - 2)
