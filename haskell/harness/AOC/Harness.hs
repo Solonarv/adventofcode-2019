@@ -207,7 +207,7 @@ runTestsOn day Solution{tests,decodeInput,solvePart,showResult} parts = do
   for_ (zip [1..] tests) $ \(n :: Int, input :=> expected) -> do
     fgColor Ansi.Vivid Ansi.Blue
     printf "  Test #%v\n" n
-    case parse decodeInput "<test input>" input of
+    case parse decodeInput "<test input>" . List.dropWhile isSpace . List.dropWhileEnd isSpace $ input of
       Left err -> do
         fgColor Ansi.Dull Ansi.Red
         printf "    Couldn't decode test input.\n"

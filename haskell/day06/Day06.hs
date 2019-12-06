@@ -1,5 +1,6 @@
 module Day06 where
 
+import Control.Monad
 import Data.Maybe
 
 import Data.Map (Map)
@@ -10,27 +11,47 @@ import AOC.Solution
 import ParsingPrelude
 import Util
 
-solution :: Solution (Map String String) Int
+solution :: Solution (Map String (Int, Map String Int)) Int
 solution = Solution
-  { decodeInput = Map.fromList <$> ((flip (,) <$> word <*> word) `sepBy` space)
-  , parts = "a"
+  { decodeInput = orbitAncestors . Map.fromList <$> ((flip (,) <$> word <* char ')' <*> word) `sepBy` space)
+  , parts = "ab"
   , solvePart = \case
     'a' -> Just . totalOrbits
+    'b' -> shortestTransfer "YOU" "SAN"
     _ -> const Nothing
   , showResult = const show
   , tests =
     [ unlines ["COM)B","B)C","C)D","D)E","E)F","B)G","G)H","D)I","E)J","J)K","K)L"] :=>
       [ ('a', "42")
       ]
+    , unlines ["COM)B","B)C","C)D","D)E","E)F","B)G","G)H","D)I","E)J","J)K","K)L","K)YOU","I)SAN"] :=>
+      [ ('b', "4")
+      ]
     ]
   }
   where
-    word = many alphaNumChar
+    word = some alphaNumChar
 
-totalOrbits :: Map String String -> Int
-totalOrbits orbitMap = sum parentCounts
+totalOrbits :: Map String (Int, Map String Int) -> Int
+totalOrbits = sum' . fmap fst
+
+orbitAncestors :: Map String String -> Map String (Int, Map String Int)
+orbitAncestors orbitMap = ancestors
   where
-    parentCounts = flip LazyMap.mapWithKey
+    ancestors = flip LazyMap.map
       orbitMap
-      \_child parent ->
-        1 + fromMaybe 0 (LazyMap.lookup parent parentCounts)
+      \parent ->
+        let
+          ~(depth, distances) = fromMaybe (0, Map.empty) (Map.lookup parent ancestors)
+        in
+          ( depth + 1
+          , Map.insert parent 1 $ Map.map (+1) distances
+          )
+
+shortestTransfer :: String -> String -> Map String (Int, Map String Int) -> Maybe Int
+shortestTransfer src tgt orbits = do
+  srcAncestors <- snd <$> Map.lookup src orbits
+  tgtAncestors <- snd <$> Map.lookup tgt orbits
+  let commonAncestors = Map.intersectionWith (+) srcAncestors tgtAncestors
+  guard . not . null $ commonAncestors
+  pure (minimum commonAncestors - 2)
