@@ -6,7 +6,6 @@ import Data.Foldable
 import Data.Function
 import Data.Maybe
 import Data.IORef
-import Data.Void
 import System.IO.Unsafe
 
 import Data.IntMap.Strict (IntMap)
