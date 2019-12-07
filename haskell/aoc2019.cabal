@@ -24,6 +24,9 @@ common deps
                      , parser-combinators
                      , linear
                      , split
+                     , conduit
+                     , mtl
+                     , monad-loops
 
 common lang
   default-language:    Haskell2010
@@ -33,7 +36,7 @@ common lang
                        TypeApplications ScopedTypeVariables ConstraintKinds FunctionalDependencies
                        MultiParamTypeClasses NamedFieldPuns LambdaCase BangPatterns DerivingStrategies
                        GeneralizedNewtypeDeriving RoleAnnotations TupleSections BlockArguments
-                       DeriveFunctor DeriveFoldable DeriveTraversable DerivingVia
+                       DeriveFunctor DeriveFoldable DeriveTraversable DerivingVia ViewPatterns
   ghc-options:         -Wall -O2
 
 executable solve
@@ -63,6 +66,14 @@ library util
   import: deps, lang
   hs-source-dirs:      util
   exposed-modules:     Util, ParsingPrelude
+  build-depends:       primitive
+
+library intcode
+  import: deps, lang
+  hs-source-dirs: intcode
+  exposed-modules: Intcode
+  build-depends: util, primitive
+
 
 library day01
   import: deps, lang
@@ -92,7 +103,7 @@ library day05
   import: deps, lang
   exposed-modules: Day05
   hs-source-dirs: day05
-  build-depends: aoc2019, util
+  build-depends: aoc2019, util, intcode
 
 library day06
   import: deps, lang
