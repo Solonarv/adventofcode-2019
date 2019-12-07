@@ -1,7 +1,5 @@
 module Day05 where
 
-import Control.Monad
-
 import Data.Vector.Unboxed (Vector)
 
 import AOC.Solution

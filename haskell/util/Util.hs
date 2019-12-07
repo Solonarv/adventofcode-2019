@@ -11,8 +11,6 @@ import Data.Void
 import System.IO.Unsafe
 
 import Control.Monad.Primitive
-import qualified Data.Conduit as C
-import qualified Data.Conduit.Internal as CI
 import Data.IntMap.Strict (IntMap)
 import qualified Data.IntMap.Strict as IntMap
 import Data.Map.Strict (Map)
@@ -65,6 +63,11 @@ maxOn f x y = if f x < f y then y else x
 minOn :: Ord i => (a -> i) -> a -> a -> a
 minOn f x y = if f x > f y then y else x
 
+safeMaximum :: (Foldable t, Ord a) => t a -> Maybe a
+safeMaximum xs
+  | null xs = Nothing
+  | otherwise = Just (maximum xs)
+
 collapseMapWith :: (k -> v -> a) -> (a -> a -> a) -> Map k v -> Maybe a
 collapseMapWith f op = collapse
   where
@@ -104,6 +107,11 @@ safeHead :: [a] -> Maybe a
 safeHead [] = Nothing
 safeHead (x:_) = Just x
 
+safeLast :: [a] -> Maybe a
+safeLast [] = Nothing
+safeLast [x] = Just x
+safeLast (_:xs) = safeLast xs
+
 diag :: a -> (a, a)
 diag x = (x,x)
 
@@ -128,23 +136,3 @@ liftST :: PrimMonad m => ST (PrimState m) a -> m a
 liftST = stToPrim
 {-# INLINE liftST #-}
 
-conduitMapMOutput :: forall i a b m r. Monad m => (a -> m b) -> C.ConduitT i a m r -> C.ConduitT i b m r
-conduitMapMOutput f (C.sealConduitT -> CI.SealedConduitT cond) = (C.unsealConduitT . CI.SealedConduitT) (loop cond)
-  where
-    loop :: CI.Pipe l i a u m r -> CI.Pipe l i b u m r
-    loop (CI.HaveOutput next o) = CI.PipeM do
-      o' <- f o
-      pure (CI.HaveOutput (loop next) o')
-    loop (CI.NeedInput ki ku) = CI.NeedInput (loop . ki) (loop . ku)
-    loop (CI.Done r) = CI.Done r
-    loop (CI.PipeM mnext) = CI.PipeM (loop <$> mnext)
-    loop (CI.Leftover next l) = CI.Leftover (loop next) l
-
-conduitConsumeAll :: forall i o m r. Monad m => C.ConduitT i o m r -> C.ConduitT i Void m r
-conduitConsumeAll (C.sealConduitT -> CI.SealedConduitT cond) = (C.unsealConduitT . CI.SealedConduitT) (loop cond)
-  where
-    loop (CI.HaveOutput next o) = loop next
-    loop (CI.NeedInput ki ku) = CI.NeedInput (loop . ki) (loop . ku)
-    loop (CI.Done r) = CI.Done r
-    loop (CI.PipeM mnext) = CI.PipeM (loop <$> mnext)
-    loop (CI.Leftover next l) = CI.Leftover (loop next) l

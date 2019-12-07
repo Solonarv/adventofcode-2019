@@ -1,18 +1,15 @@
 module Intcode where
 
-import Control.Monad.ST
 import Data.Functor
-import Data.STRef
+import Data.Functor.Identity
 
 import Control.Monad.Except
-import Control.Monad.Loops (untilJust)
-import Control.Monad.Primitive
-import Control.Monad.Reader
+import Control.Monad.Loops (whileM_)
+import Control.Monad.State.Strict
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
-import Data.Vector.Unboxed (Vector, MVector)
+import Data.Vector.Unboxed (Vector, (!), (//))
 import qualified Data.Vector.Unboxed as Vector
-import qualified Data.Vector.Unboxed.Mutable as MVector
 import Data.Conduit (ConduitT, (.|))
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
@@ -21,41 +18,63 @@ import qualified Data.Conduit.Lift as C
 import ParsingPrelude
 import Util
 
-data VM s = VM
-  { vmIP :: STRef s Int
-  , vmExited :: STRef s (Maybe String)
-  , vmMem :: MVector s Int
+data VMState = VM
+  { vmIP :: Int
+  , vmStatus :: VMStatus
+  , vmMem :: Vector Int
   }
+  deriving (Eq, Ord, Show)
 
-type InterpreterM m = ConduitT Int Int (ReaderT (VM (PrimState m)) m)
+data VMStatus = Finished String | Running | AwaitingInput Int
+  deriving (Eq, Ord, Show)
 
-type MonadVM m = (MonadReader (VM (PrimState m)) m, PrimMonad m)
+type InterpreterT m = ConduitT Int Int (StateT VMState m)
 
-runVM :: PrimMonad m => Map Int SomeOp -> Vector Int -> ConduitT Int Int m String
-runVM opcodeMap code = do
-  vm <- newVM code
-  C.runReaderC vm $ execVM opcodeMap
+type InterpreterM = InterpreterT Identity
+
+type MonadVM m = MonadState VMState m
+
+runVM :: Monad m => Map Int SomeOp -> Vector Int -> ConduitT Int Int m VMState
+runVM opcodeMap code = 
+  C.execStateC (newVM code) $ execVM opcodeMap
 
 runVMPure :: [Int] -> Map Int SomeOp -> Vector Int -> [Int]
-runVMPure inp opcodeMap code = runST do
-  C.runConduit do
+runVMPure inp opcodeMap code =
+  C.runConduitPure do
     C.yieldMany inp .| void (runVM opcodeMap code) .| C.sinkList
 
 runVMio :: Map Int SomeOp -> Vector Int -> IO ()
-runVMio opcodeMap code = do
-  msg <- C.runConduit do
-    C.repeatM (putStr "> " >> readLn)
-      .| conduitConsumeAll (conduitMapMOutput print (runVM opcodeMap code))
-  putStrLn ("exited with: " <> msg)
+runVMio opcodeMap code = go (newVM code) []
+  where
+    go vm ins = do
+      let (outs, vm') = C.runConduitPure $ C.runStateC vm (C.yieldMany ins .| execVM opcodeMap .| C.sinkList)
+      forM_ outs \x -> putStrLn $ " = " <> show x
+      case vmStatus vm' of
+        Finished msg -> putStrLn $ "exited: " <> msg
+        Running -> putStrLn "interpreter exited but is still running?? strange!"
+        AwaitingInput _ -> do
+          putStr " > "
+          i <- readLn
+          go (resumeVM vm') [i]
 
-newVM :: PrimMonad m => Vector Int -> m (VM (PrimState m))
-newVM code = liftST (VM <$> newSTRef 0 <*> newSTRef Nothing <*> Vector.thaw code)
+resumeVM :: VMState -> VMState
+resumeVM vm = case vmStatus vm of
+  AwaitingInput ip -> vm { vmIP = ip, vmStatus = Running }
+  _ -> vm
+  
+vmExited :: VMState -> Bool
+vmExited vm = case vmStatus vm of
+  Finished _ -> True
+  _ -> False
+
+newVM :: Vector Int -> VMState
+newVM code = VM 0 Running code
 
 setIP :: MonadVM m => Int -> m ()
-setIP i = do ipr <- asks vmIP; liftST (writeSTRef ipr i)
+setIP i = modify \vm -> vm{vmIP = i}
 
 getIP :: MonadVM m => m Int
-getIP = liftST . readSTRef =<< asks vmIP
+getIP = gets vmIP
 
 getIncrIP :: MonadVM m => m Int
 getIncrIP = do i <- getIP; i <$ setIP (i+1)
@@ -64,14 +83,13 @@ data Mode = Immediate | Position
 
 load :: MonadVM m => Mode -> m Int
 load Immediate = do
-  mem <- asks vmMem
+  mem <- gets vmMem
   i <- getIncrIP
-  MVector.read mem i
+  pure (mem ! i)
 load Position = do
-  mem <- asks vmMem
+  mem <- gets vmMem
   i <- getIncrIP
-  i' <- MVector.read mem i
-  MVector.read mem i'
+  pure (mem ! (mem ! i))
 
 store :: MonadVM m => Int -> m ()
 store x = do
@@ -80,16 +98,16 @@ store x = do
 
 setMem :: MonadVM m => Int -> Int -> m ()
 setMem i x = do
-  mem <- asks vmMem
-  MVector.write mem i x
+  mem <- gets vmMem
+  modify \vm -> vm{ vmMem = mem // [(i, x)] }
 
 exitMsg :: MonadVM m => m (Maybe String)
-exitMsg = liftST . readSTRef =<< asks vmExited
+exitMsg = gets vmStatus <&> \case
+  Finished msg -> Just msg
+  _ -> Nothing
 
 exitWith :: MonadVM m => String -> m ()
-exitWith msg = do
-  exitRef <- asks vmExited
-  liftST (writeSTRef exitRef (Just msg))
+exitWith msg = modify \vm -> vm{vmStatus = Finished msg}
 
 nextOp :: MonadVM m => Map Int SomeOp -> m (Either String (Stream Mode, SomeOp))
 nextOp opcodeMap = do
@@ -106,14 +124,17 @@ readOpcode opcode = let
   modes = fmap (\case 0 -> Position; _ -> Immediate) $ unfoldStream (swap . (`divMod` 10)) modeKey
   in (modes, code)
 
-execVM :: PrimMonad m => Map Int SomeOp -> InterpreterM m String
-execVM opcodeMap = untilJust do
-  nextOp opcodeMap >>= \case
-    Left err -> exitWith err  
-    Right (modes, op) -> runSomeOp op modes
-  exitMsg
+execVM :: Monad m => Map Int SomeOp -> InterpreterT m ()
+execVM opcodeMap = whileM_
+  do
+    status <- gets vmStatus
+    pure (status == Running)
+  do
+    nextOp opcodeMap >>= \case
+      Left err -> exitWith err  
+      Right (modes, op) -> runSomeOp op modes
 
-type Op = forall m. PrimMonad m => Stream Mode -> InterpreterM m ()
+type Op = forall m. Monad m => Stream Mode -> InterpreterT m ()
 
 newtype SomeOp = SomeOp { runSomeOp :: Op }
 
@@ -148,7 +169,7 @@ opOutput (m:>>_) = C.yield =<< load m
 
 opInput :: Op
 opInput _ = C.await >>= \case
-  Nothing -> exitWith "end of input"
+  Nothing -> modify \vm -> vm{ vmStatus = AwaitingInput (vmIP vm - 1) }
   Just x -> store x
 
 opJumpWhen :: (Int -> Bool) -> Op
