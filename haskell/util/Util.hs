@@ -68,6 +68,9 @@ safeMaximum xs
   | null xs = Nothing
   | otherwise = Just (maximum xs)
 
+safely :: Foldable t => (t a -> r) -> t a -> Maybe r
+safely f xs = f xs <$ (guard . not . null) xs
+
 collapseMapWith :: (k -> v -> a) -> (a -> a -> a) -> Map k v -> Maybe a
 collapseMapWith f op = collapse
   where
@@ -135,4 +138,3 @@ unfoldStream f = loop
 liftST :: PrimMonad m => ST (PrimState m) a -> m a
 liftST = stToPrim
 {-# INLINE liftST #-}
-
