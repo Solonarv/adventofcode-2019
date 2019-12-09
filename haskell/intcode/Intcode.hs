@@ -6,24 +6,39 @@ import Data.Functor.Identity
 import Control.Monad.Except
 import Control.Monad.Loops (whileM_)
 import Control.Monad.State.Strict
+import Control.Lens
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
-import Data.Vector.Unboxed (Vector, (!), (//))
+import Data.Vector.Unboxed (Vector)
 import qualified Data.Vector.Unboxed as Vector
 import Data.Conduit (ConduitT, (.|))
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Lift as C
 
+import PagedVector
 import ParsingPrelude
 import Util
 
 data VMState = VM
   { vmIP :: Int
+  , vmRelBase :: Int
   , vmStatus :: VMStatus
-  , vmMem :: Vector Int
+  , vmMem :: Paged Vector Int
   }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Show)
+
+_vmIP :: Lens' VMState Int
+_vmIP f vm = f (vmIP vm) <&> \i -> vm{vmIP=i}
+
+_vmRelBase :: Lens' VMState Int
+_vmRelBase f vm = f (vmRelBase vm) <&> \i -> vm{vmRelBase = i}
+
+_vmStatus :: Lens' VMState VMStatus
+_vmStatus f vm = f (vmStatus vm) <&> \s -> vm{vmStatus = s}
+
+_vmMem :: Lens' VMState (Paged Vector Int)
+_vmMem f vm = f (vmMem vm) <&> \m -> vm{vmMem = m}
 
 data VMStatus = Finished String | Running | AwaitingInput Int
   deriving (Eq, Ord, Show)
@@ -34,16 +49,18 @@ type InterpreterM = InterpreterT Identity
 
 type MonadVM m = MonadState VMState m
 
-runVM :: Monad m => Map Int SomeOp -> Vector Int -> ConduitT Int Int m VMState
+type Code = Vector Int
+
+runVM :: Monad m => Map Int SomeOp -> Code -> ConduitT Int Int m VMState
 runVM opcodeMap code = 
   C.execStateC (newVM code) $ execVM opcodeMap
 
-runVMPure :: [Int] -> Map Int SomeOp -> Vector Int -> [Int]
+runVMPure :: [Int] -> Map Int SomeOp -> Code -> [Int]
 runVMPure inp opcodeMap code =
   C.runConduitPure do
     C.yieldMany inp .| void (runVM opcodeMap code) .| C.sinkList
 
-runVMio :: Map Int SomeOp -> Vector Int -> IO ()
+runVMio :: Map Int SomeOp -> Code -> IO ()
 runVMio opcodeMap code = go (newVM code) []
   where
     go vm ins = do
@@ -67,39 +84,44 @@ vmExited vm = case vmStatus vm of
   Finished _ -> True
   _ -> False
 
-newVM :: Vector Int -> VMState
-newVM code = VM 0 Running code
+newVM :: Code -> VMState
+newVM code = VM 0 0 Running (mkPaged 512 0 code)
 
 setIP :: MonadVM m => Int -> m ()
-setIP i = modify \vm -> vm{vmIP = i}
+setIP = assign _vmIP
 
 getIP :: MonadVM m => m Int
-getIP = gets vmIP
+getIP = use _vmIP
 
 getIncrIP :: MonadVM m => m Int
-getIncrIP = do i <- getIP; i <$ setIP (i+1)
+getIncrIP = _vmIP <<+= 1
 
-data Mode = Immediate | Position
+data Mode = Immediate | Position | Relative
 
 load :: MonadVM m => Mode -> m Int
 load Immediate = do
-  mem <- gets vmMem
   i <- getIncrIP
-  pure (mem ! i)
+  use (_vmMem . atAddr i)
 load Position = do
-  mem <- gets vmMem
-  i <- getIncrIP
-  pure (mem ! (mem ! i))
+  i' <- load Immediate
+  use (_vmMem . atAddr i')
+load Relative = do
+  offset <- load Immediate
+  base <- use _vmRelBase
+  use (_vmMem . atAddr (offset + base))
 
-store :: MonadVM m => Int -> m ()
-store x = do
+store :: MonadVM m => Mode -> Int -> m ()
+store Immediate _ = exitWith "write parameters cannot be in immediate mode!"
+store Position x = do
   addr <- load Immediate
   setMem addr x
+store Relative x = do
+  offset <- load Immediate
+  base <- use _vmRelBase
+  setMem (offset + base) x
 
 setMem :: MonadVM m => Int -> Int -> m ()
-setMem i x = do
-  mem <- gets vmMem
-  modify \vm -> vm{ vmMem = mem // [(i, x)] }
+setMem i x = _vmMem . atAddr i .= x
 
 exitMsg :: MonadVM m => m (Maybe String)
 exitMsg = gets vmStatus <&> \case
@@ -116,12 +138,17 @@ nextOp opcodeMap = do
       mbOp = Map.lookup code opcodeMap
   pure case mbOp of
     Nothing -> Left ("invalid opcode: " <> show code)
-    Just op -> Right (modes, op)
+    Just oper -> Right (modes, oper)
 
 readOpcode :: Int -> (Stream Mode, Int)
 readOpcode opcode = let
   (modeKey, code) = opcode `divMod` 100
-  modes = fmap (\case 0 -> Position; _ -> Immediate) $ unfoldStream (swap . (`divMod` 10)) modeKey
+  readMode = \case
+    0 -> Position
+    1 -> Immediate
+    2 -> Relative
+    e -> error $ "invalid parameter mode: " <> show e
+  modes = readMode <$> unfoldStream (swap . (`divMod` 10)) modeKey
   in (modes, code)
 
 execVM :: Monad m => Map Int SomeOp -> InterpreterT m ()
@@ -132,7 +159,7 @@ execVM opcodeMap = whileM_
   do
     nextOp opcodeMap >>= \case
       Left err -> exitWith err  
-      Right (modes, op) -> runSomeOp op modes
+      Right (modes, oper) -> runSomeOp oper modes
 
 type Op = forall m. Monad m => Stream Mode -> InterpreterT m ()
 
@@ -142,7 +169,7 @@ class NaryOp t where
   naryOp :: t -> Op
 
 instance NaryOp Int where
-  naryOp x _ = store x
+  naryOp x (m:>>_) = store m x
 
 instance (arg ~ Int, NaryOp r) => NaryOp (arg -> r) where
   naryOp f (m:>>ms) = do
@@ -151,26 +178,27 @@ instance (arg ~ Int, NaryOp r) => NaryOp (arg -> r) where
 
 defaultOpcodeMap :: Map Int SomeOp
 defaultOpcodeMap = Map.fromList
-  [ 1  .= naryOp (+)
-  , 2  .= naryOp (*)
-  , 3  .= opInput
-  , 4  .= opOutput
-  , 5  .= opJumpWhen (/= 0)
-  , 6  .= opJumpWhen (== 0)
-  , 7  .= naryOp (\x y -> fromEnum (x < y))
-  , 8  .= naryOp (\x y -> fromEnum (x == y))
-  , 99 .= opExit
+  [ 1  ==> naryOp (+)
+  , 2  ==> naryOp (*)
+  , 3  ==> opInput
+  , 4  ==> opOutput
+  , 5  ==> opJumpWhen (/= 0)
+  , 6  ==> opJumpWhen (== 0)
+  , 7  ==> naryOp (\x y -> fromEnum (x < y))
+  , 8  ==> naryOp (\x y -> fromEnum (x == y))
+  , 9  ==> opAdjustRelBase
+  , 99 ==> opExit
   ] where
-    (.=) :: Int -> Op -> (Int, SomeOp)
-    k .= f = (k, SomeOp f)
+    (==>) :: Int -> Op -> (Int, SomeOp)
+    k ==> f = (k, SomeOp f)
 
 opOutput :: Op
 opOutput (m:>>_) = C.yield =<< load m
 
 opInput :: Op
-opInput _ = C.await >>= \case
+opInput (m:>>_) = C.await >>= \case
   Nothing -> modify \vm -> vm{ vmStatus = AwaitingInput (vmIP vm - 1) }
-  Just x -> store x
+  Just x -> store m x
 
 opJumpWhen :: (Int -> Bool) -> Op
 opJumpWhen cond (mVal :>> mTarg :>>_) = do
@@ -178,8 +206,13 @@ opJumpWhen cond (mVal :>> mTarg :>>_) = do
   targ <- load mTarg
   when (cond val) (setIP targ)
 
+opAdjustRelBase :: Op
+opAdjustRelBase (m:>>_) = do
+  adj <- load m
+  _vmRelBase += adj
+
 opExit :: Op
 opExit _ = exitWith "halt"
 
-parseIntcode :: Parser (Vector Int)
+parseIntcode :: Parser (Code)
 parseIntcode = Vector.fromList <$> (signed space decimal `sepBy` char ',')
