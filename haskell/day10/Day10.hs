@@ -3,12 +3,9 @@ module Day10 where
 import Data.Foldable
 import Data.Functor
 import Data.List
--- import Data.Ratio
-import Debug.Trace
 
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
--- import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Vector (Vector)
 import qualified Data.Vector as Vector
@@ -119,26 +116,18 @@ bestMonitoringStation asteroids = safely (maximumOn fst)
   | self <- asteroids
   ]
 
-swapV2 :: V2 a -> V2 a
-swapV2 (V2 x y) = V2 y x
-
 nthVaporized :: Int -> [V2 Int] -> Maybe (V2 Int)
 nthVaporized n asteroids = do
   (_, station) <- bestMonitoringStation asteroids
-  traceShowM ("#asteroids", length asteroids)
-  traceShowM ("station", station)
   let targets :: Map (RatAngle Int) ([V2 Int])
       targets = Map.fromListWith
         (++)
-        [ (atan2r (swapV2 dv), [dv])
+        [ (atan2r (perp dv), [v])
         | v <- asteroids
         , v /= station
         , let dv = v - station
         ]
-        <&> sortOn (sum . fmap abs)
+        <&> sortOn (sum . fmap abs . subtract station)
 
-      nth_rel = traceShow ("targets", targets)
-        $ traceShow ("#targets", length targets)
-        $ snd <$> multimapAt (n) targets
-  traceShowM ("nth (relative)", nth_rel)
-  (station +) <$> nth_rel
+      nth_rel = snd <$> multimapAt (n-1) targets
+  nth_rel
