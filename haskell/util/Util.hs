@@ -7,6 +7,7 @@ import Data.Foldable
 import Data.Function
 import Data.Maybe
 import Data.IORef
+import Data.Ratio
 import System.IO.Unsafe
 
 import Control.Monad.Primitive
@@ -137,3 +138,11 @@ unfoldStream f = loop
 liftST :: PrimMonad m => ST (PrimState m) a -> m a
 liftST = stToPrim
 {-# INLINE liftST #-}
+
+multimapAt :: Ord k => Int -> Map k [v] -> Maybe (k, v)
+multimapAt i (Map.filter (not.null) -> m)
+  | null m       = Nothing
+  | i < length m = Just case Map.elemAt i m of
+    (k, (v:_)) -> (k, v)
+    _ -> error "multimapAt: multimap had empty entry even though it was filtered by not.null !?"
+  | otherwise = multimapAt (i - length m) (drop 1 <$> m)
