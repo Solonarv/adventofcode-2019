@@ -39,6 +39,7 @@ instance (Show a, Show (vec a), Vector.Vector vec a) => Show (Paged vec a) where
     . showsPrec 11 pageSize
     . showString " "
     . showsPrec 11 pageDefault
+    . showString " "
     . showList
       [ if Vector.length page > 0
           then Vector.toList page
