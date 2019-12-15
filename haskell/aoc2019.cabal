@@ -47,7 +47,7 @@ executable solve
   hs-source-dirs:      src
   build-depends:       aoc2019
                      , day01, day02, day03, day04, day05, day06
-                     , day07, day08, day09, day10, day11
+                     , day07, day08, day09, day10, day11, day12
   ghc-options:         -threaded -rtsopts -funbox-small-strict-fields
 
 library
@@ -142,3 +142,9 @@ library day11
   exposed-modules: Day11
   hs-source-dirs: day11
   build-depends: aoc2019, util, intcode
+
+library day12
+  import: deps, lang
+  exposed-modules: Day12
+  hs-source-dirs: day12
+  build-depends: aoc2019, util

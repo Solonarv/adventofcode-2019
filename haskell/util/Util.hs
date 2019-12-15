@@ -3,11 +3,13 @@ module Util where
 import Control.Applicative
 import Control.Monad
 import Control.Monad.ST
+import Data.Coerce
 import Data.Foldable
 import Data.Function
 import Data.Maybe
+import Data.Monoid
 import Data.IORef
-import Data.Ratio
+import Data.Semigroup
 import System.IO.Unsafe
 
 import Control.Monad.Primitive
@@ -146,3 +148,6 @@ multimapAt i (Map.filter (not.null) -> m)
     (k, (v:_)) -> (k, v)
     _ -> error "multimapAt: multimap had empty entry even though it was filtered by not.null !?"
   | otherwise = multimapAt (i - length m) (drop 1 <$> m)
+
+funcpow :: forall a. Int -> (a -> a) -> a -> a
+funcpow n = coerce (stimes @(Endo a) n)
